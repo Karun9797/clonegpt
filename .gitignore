@@ -1,0 +1,22 @@
+# Ignore all node_modules folders anywhere
+node_modules/
+
+# Ignore all .env files anywhere
+.env
+.env.*
+
+# Optional: common build outputs
+dist/
+build/
+out/
+
+# Optional: logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Optional: OS-specific junk files
+.DS_Store
+Thumbs.db
