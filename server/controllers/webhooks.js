@@ -4,20 +4,20 @@ import User from '../models/users.js';
 
 export const stripeWebHooks = async (request, response) => {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-  const sign = request.headers['stripe-signature'];
+  const signature = request.headers['stripe-signature'];
 
   let event;
 
   try {
     event = stripe.webhooks.constructEvent(
       request.body,
-      sign,
+      signature,
       process.env.STRIPE_WEBHOOK_SECRET_KEY
     );
   } catch (error) {
     return response.status(400).send(`Webhook Error: ${error.message}`);
   }
-
+  console.log('✅ Stripe webhook received:', event?.type);
   try {
     switch (event.type) {
       case 'payment_intent.succeeded': {
@@ -31,7 +31,7 @@ export const stripeWebHooks = async (request, response) => {
 
         if (appId === 'clonegpt') {
           const transaction = await Transaction.findOne({ _id: transactionId, isPaid: false });
-
+          console.log(transaction || 'not found');
           // update credits in user account
           await User.updateOne(
             { _id: transaction.userId },
@@ -41,6 +41,7 @@ export const stripeWebHooks = async (request, response) => {
           // update credits payment status
           transaction.isPaid = true;
           await transaction.save();
+          console.log('💰 Payment succeeded for transaction:', transactionId);
         } else {
           return response.json({ received: true, message: 'Ignored event: Invalid app' });
         }
