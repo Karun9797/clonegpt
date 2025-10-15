@@ -2,10 +2,45 @@ import { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { assets } from '../assets/assets';
 import moment from 'moment/moment';
+import toast from 'react-hot-toast';
 
 const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
-  const { chats, setSelectedChat, theme, setTheme, user, navigate } = useAppContext();
+  const {
+    chats,
+    setSelectedChat,
+    theme,
+    setTheme,
+    user,
+    navigate,
+    createNewChat,
+    setChats,
+    axios,
+    fetchUsersChats,
+    token,
+    setToken,
+  } = useAppContext();
   const [search, setSearch] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, chatId: null });
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    toast.success('Logged out successfully');
+  };
+
+  const deleteChat = async (chatId) => {
+    if (!confirm) return Promise.reject('Cancelled');
+    const { data } = await axios.post(
+      '/api/chat/delete',
+      { chatId },
+      { headers: { Authorization: token } }
+    );
+    if (!data.success) return Promise.reject(data.message);
+    setChats((prev) => prev.filter((chat) => chat._id !== chatId));
+    await fetchUsersChats();
+    return data.message;
+  };
+
   return (
     <div
       className={`flex flex-col h-screen min-w-72 p-5 dark:bg-gradient-to-b
@@ -25,6 +60,7 @@ const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
       <button
         className="flex justify-center items-center w-full py-2 mt-10 text-white bg-gradient-to-r
         from-[#A456F7] to-[#3D81F6] hover:from-[#9840f6] hover:to-[#3079f6] text-sm rounded-md cursor-pointer"
+        onClick={createNewChat}
       >
         New Chat <span className="ml-1 text-xl"> +</span>
       </button>
@@ -74,7 +110,42 @@ const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
                 src={assets.bin_icon}
                 alt="delete icon"
                 className="hidden group-hover:block w-8 h-8 cursor-pointer not-dark:invert hover:bg-gray-500/40 rounded-full p-2 transition-all duration-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmDelete({ open: true, chatId: chat._id });
+                }}
               />
+              {confirmDelete.open && (
+                <div className="w-screen fixed inset-0 flex items-center justify-center z-50 bg-black/40">
+                  <div className="bg-white dark:bg-[#2a2235] p-6 rounded-lg shadow-lg w-80 text-center">
+                    <h3 className="text-lg font-semibold mb-3">Delete Chat?</h3>
+                    <p className="text-sm text-gray-500 mb-5">
+                      Are you sure you want to delete this chat? This action cannot be undone.
+                    </p>
+                    <div className="flex justify-center gap-3">
+                      <button
+                        className="px-4 py-2 bg-gray-400 rounded hover:bg-gray-500"
+                        onClick={() => setConfirmDelete({ open: false, chatId: null })}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+                        onClick={async () => {
+                          setConfirmDelete({ open: false, chatId: null });
+                          toast.promise(deleteChat(confirmDelete.chatId), {
+                            loading: 'Deleting...',
+                            success: (msg) => msg,
+                            error: (err) => err,
+                          });
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
       </div>
@@ -127,10 +198,7 @@ const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
       </div>
 
       {/* user account */}
-      <div
-        className="group flex items-center gap-3 p-3 mt-4 border border-gray-300 dark:border-white/15 rounded-md cursor-pointer"
-        onClick={() => navigate('/community')}
-      >
+      <div className="group flex items-center gap-3 p-3 mt-4 border border-gray-300 dark:border-white/15 rounded-md cursor-pointer">
         <img
           src={assets.user_icon}
           alt="user account"
@@ -141,6 +209,7 @@ const Sidebar = ({ isMenuOpen, setIsMenuOpen }) => {
           <img
             src={assets.logout_icon}
             className="h-5 cursor-pointer hidden not-dark:invert group-hover:block"
+            onClick={logout}
           />
         )}
       </div>

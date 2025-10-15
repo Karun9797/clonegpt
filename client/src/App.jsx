@@ -1,25 +1,27 @@
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import { Route, Routes, useLocation } from 'react-router-dom';
-import ChatBox from './components/ChatBox';
 import Credits from './pages/Credits';
+import ChatBox from './components/Chatbox';
 import Community from './pages/Community';
 import { assets } from './assets/assets';
 import './assets/prism.css';
 import Login from './pages/Login';
 import { useAppContext } from './context/AppContext';
 import Loading from './pages/Loading';
+import { Toaster } from 'react-hot-toast';
 
 const App = () => {
-  const { user } = useAppContext();
+  const { user, loadingUser } = useAppContext();
   const [isMenuOpen, setIsMenuOpen] = useState(true);
 
   const { pathname } = useLocation();
 
-  if (pathname === '/loading') return <Loading />;
+  if (pathname === '/loading' || loadingUser) return <Loading />;
 
   return (
     <>
+      <Toaster />
       {!isMenuOpen && (
         <img
           src={assets.menu_icon}

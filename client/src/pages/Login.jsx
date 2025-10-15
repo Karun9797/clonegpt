@@ -1,24 +1,43 @@
 import { useState } from 'react';
+import { useAppContext } from '../context/AppContext';
+import toast from 'react-hot-toast';
 
 const Login = () => {
   // state for login or register
   const [state, setState] = useState('login');
 
-  // state for input value
-  const [data, setData] = useState({
-    name: '',
-    email: '',
-    password: '',
-  });
+  // separate states for input values
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  // handle change input value
-  const onChangeHandler = (e) => {
-    setData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
+  // state for token and axios instance
+  const { axios, setToken } = useAppContext();
 
   // handle submit form
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    const url = state === 'login' ? '/api/user/login' : '/api/user/register';
+
+    try {
+      const response = await axios.post(url, { name, email, password });
+      const data = response.data;
+
+      console.log('Response:', response);
+      console.log('Data:', data);
+
+      if (data?.success) {
+        setToken(data.token);
+        localStorage.setItem('token', data.token);
+        toast.success('Logged in successfully!');
+      } else {
+        toast.error(data?.message || 'Something went wrong');
+      }
+    } catch (error) {
+      // Axios error objects might have response data
+      console.error('Error:', error);
+      toast.error(error?.response?.data?.message || error.message || 'Network error');
+    }
   };
 
   return (
@@ -33,6 +52,7 @@ const Login = () => {
         Please {state === 'login' ? 'sign in' : 'sign up'} to continue
       </p>
 
+      {/* Name field — only show during register */}
       {state !== 'login' && (
         <div className="flex items-center w-full mt-4 bg-white dark:bg-zinc-800 border border-zinc-300/80 dark:border-zinc-700 h-12 rounded-full overflow-hidden pl-6 gap-2">
           {/* User Icon */}
@@ -55,14 +75,14 @@ const Login = () => {
             type="text"
             placeholder="Name"
             className="bg-transparent text-zinc-600 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-400 outline-none text-sm w-full h-full"
-            name="name"
-            value={data.name}
-            onChange={onChangeHandler}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             required
           />
         </div>
       )}
 
+      {/* Email field */}
       <div className="flex items-center w-full mt-4 bg-white dark:bg-zinc-800 border border-zinc-300/80 dark:border-zinc-700 h-12 rounded-full overflow-hidden pl-6 gap-2">
         {/* Mail Icon */}
         <svg
@@ -84,13 +104,13 @@ const Login = () => {
           type="email"
           placeholder="Email id"
           className="bg-transparent text-zinc-600 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-400 outline-none text-sm w-full h-full"
-          name="email"
-          value={data.email}
-          onChange={onChangeHandler}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
       </div>
 
+      {/* Password field */}
       <div className="flex items-center mt-4 w-full bg-white dark:bg-zinc-800 border border-zinc-300/80 dark:border-zinc-700 h-12 rounded-full overflow-hidden pl-6 gap-2">
         {/* Lock Icon */}
         <svg
@@ -112,9 +132,8 @@ const Login = () => {
           type="password"
           placeholder="Password"
           className="bg-transparent text-zinc-600 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-400 outline-none text-sm w-full h-full"
-          name="password"
-          value={data.password}
-          onChange={onChangeHandler}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           required
         />
       </div>

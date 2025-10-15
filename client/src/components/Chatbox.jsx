@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { assets } from '../assets/assets';
 import Message from './Message';
+import toast from 'react-hot-toast';
 
 const ChatBox = () => {
-  const { selectedChat, theme } = useAppContext();
+  const { selectedChat, theme, user, axios, token, setUser } = useAppContext();
 
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -16,13 +17,57 @@ const ChatBox = () => {
   const containerRef = useRef(null);
 
   const onSubmit = async (e) => {
-    e.preventDefault();
+    try {
+      e.preventDefault();
+      console.log(mode);
+      if (!user) return toast('Login to send message');
+      setLoading(true);
+      const promptCopy = prompt;
+
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: prompt, timestamp: Date.now(), isImage: false },
+      ]);
+      const { data } = await axios.post(
+        `/api/message/${mode}`,
+        {
+          chatId: selectedChat._id,
+          prompt,
+          isPublished,
+        },
+        {
+          headers: {
+            Authorization: token,
+          },
+        }
+      );
+
+      if (data.success) {
+        setMessages((prev) => [...prev, data.reply]);
+        if (mode === 'image') {
+          setUser((prev) => ({ ...prev, credits: prev.credits - 2 }));
+        } else {
+          setUser((prev) => ({ ...prev, credits: prev.credits - 1 }));
+        }
+        setPrompt('');
+      } else {
+        toast.error(data.message || 'Server error');
+        // restore prompt so user can retry
+        setPrompt(promptCopy);
+      }
+    } catch (error) {
+      // show server provided message if available
+      const serverMessage = error?.response?.data?.message || error.message;
+      toast.error(serverMessage);
+    } finally {
+      // do not clear prompt here; only clear on success above
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     if (selectedChat) {
       setMessages(selectedChat.messages);
-      console.log(messages);
     }
   }, [selectedChat]);
 
@@ -100,6 +145,8 @@ const ChatBox = () => {
           placeholder="Type your prompt here..."
           className="flex-1 w-full text-sm outline-none"
           required
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
         />
         <button disabled={loading}>
           <img src={loading ? assets.stop_icon : assets.send_icon} className="w-8 cursor-pointer" />

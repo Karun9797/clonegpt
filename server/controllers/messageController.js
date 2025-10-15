@@ -7,38 +7,51 @@ import openai from '../configs/openai.js';
 export const textMessageController = async (request, response) => {
   try {
     const userId = request.user._id;
-    // checks credits
+    const { chatId, prompt } = request.body;
+
+    if (!prompt || !prompt.trim()) {
+      return response.json({ success: false, message: 'Prompt cannot be empty' });
+    }
+
     if (request.user.credits < 1) {
       return response.json({
         success: false,
         message: "You don't have enough credit to generate response.",
       });
     }
-    const { chatId, prompt } = request.body;
 
     const chat = await Chat.findOne({ userId, _id: chatId });
-    chat.messages.push({ role: 'user', content: prompt, timestamp: Date.now(), isImage: false });
+    if (!chat) {
+      return response.json({ success: false, message: 'Chat not found' });
+    }
 
-    //open ai
+    // Push user message
+    chat.messages.push({
+      role: 'user',
+      content: prompt,
+      timestamp: Date.now(),
+      isImage: false,
+    });
+
+    // OpenAI request
     const { choices } = await openai.chat.completions.create({
       model: 'gemini-2.0-flash',
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+      messages: [{ role: 'user', content: prompt }],
     });
 
     const reply = { ...choices[0].message, timestamp: Date.now(), isImage: false };
-    response.json({ success: true, reply });
 
+    // Push AI reply
     chat.messages.push(reply);
-    await chat.save();
 
-    await User.updateOne({ _id: userId }, { $inc: { credits: -1 } });
+    // Save chat and deduct credit
+    await Promise.all([chat.save(), User.updateOne({ _id: userId }, { $inc: { credits: -1 } })]);
+
+    // Send response AFTER everything is done
+    return response.json({ success: true, reply });
   } catch (error) {
-    response.json({ success: false, message: error.message });
+    console.error(error);
+    return response.json({ success: false, message: error.message });
   }
 };
 
@@ -67,27 +80,49 @@ export const imageMessageController = async (request, response) => {
     // construct imagekit ai generation url
     const generatedImageUrl = `${
       process.env.IMAGEKIT_URL_ENDPOINT
-    }/ik-genimg-prompt-${encodedPrompt}/clonegpt/${Date.now()}.png
-    ?tr=w-800,h-800`;
+    }/ik-genimg-prompt-${encodedPrompt}/clonegpt/${Date.now()}.png?tr=w-800,h-800`;
+    // trigger generation by fetching from ImageKit
+    let aiImageResponse;
+    try {
+      aiImageResponse = await axios.get(generatedImageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 60000,
+      });
+    } catch (err) {
+      console.error('ImageKit generation request failed', {
+        url: generatedImageUrl,
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+      });
+      return response
+        .status(502)
+        .json({ success: false, message: 'Failed to generate image from provider' });
+    }
 
-    //trigger generation by fetching from ImageKit
-    const aiImageResponse = await axios.get(generatedImageUrl, {
-      responseType: 'arraybuffer',
-      timeout: 60000,
-    });
-
-    //convert to base64
+    // convert to base64
     const base64Image = `data:image/png;base64,${Buffer.from(
       aiImageResponse.data,
       'binary'
     ).toString('base64')}`;
 
-    //upload to imagekit library
-    const uploadResponse = await imagekit.upload({
-      file: base64Image,
-      fileName: `${Date.now()}.png`,
-      folder: 'clonegpt',
-    });
+    // upload to ImageKit
+    let uploadResponse;
+    try {
+      uploadResponse = await imagekit.upload({
+        file: base64Image,
+        fileName: `${Date.now()}.png`,
+        folder: 'clonegpt',
+      });
+    } catch (err) {
+      console.error('ImageKit upload failed', {
+        message: err.message,
+        response: err.response?.data,
+      });
+      return response
+        .status(502)
+        .json({ success: false, message: 'Failed to upload generated image' });
+    }
 
     const reply = {
       role: 'assistant',
